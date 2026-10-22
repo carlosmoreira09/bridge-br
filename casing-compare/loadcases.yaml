@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------
+# Registro de carregamentos (loadcases) — SCORE-PySafe x WellCat
+# Para adicionar um carregamento novo: copie um bloco, ajuste id/nome/arquivo
+# e rode:  python src/build_deck.py
+# ---------------------------------------------------------------------------
+
+well: "Orion Firme 01"
+
+# Revestimentos comparados (ordem de apresentação). O condutor de 36" é descartado.
+# match: trechos que identificam a coluna no cabeçalho das abas térmicas
+strings:
+  - key: "22"
+    label: 'Revestimento de superfície 22"'
+    short: '22"'
+    match: '22"'
+  - key: "14"
+    label: 'Revestimento de produção 14"'
+    short: '14"'
+    match: '14"'
+  - key: "10.75"
+    label: 'Liner de produção 10 3/4"'
+    short: 'Liner 10 3/4"'
+    match: '10 3/4"'
+  - key: "COP"
+    label: "COP/COI"
+    short: "COP/COI"
+    match: "COP/COI"
+
+# Preenchimento das lacunas de temperatura (aba WellCat é esparsa)
+#  - lacunas internas: sempre interpolação linear entre pontos medidos vizinhos
+#  - fora da faixa medida: método por revestimento
+#      linear_tail: reta pelos n pontos da ponta, só até max_len_m (evita extrapolar longe)
+#      anchor     : reta do último ponto medido até o 1º ponto medido de ref_string,
+#                   depois segue ref_string (revestimento radialmente vizinho)
+temp_fill:
+  extend_default: {method: linear_tail, n: 2, max_len_m: 300}
+  extend:
+    "14":  {method: anchor, ref_string: "10.75"}
+    "COP": {method: anchor, ref_string: "10.75"}
+
+# Arquitetura do poço (MD, m) — define automaticamente qual curva do PySafe
+# é a pressão interna de cada revestimento (ver src/architecture.py):
+#   Fluido   = dentro da COP/COI; abaixo do packer, dentro do revestimento mais interno
+#   Anular A = entre COP/COI e o 1º revestimento presente (liner 10 3/4" → 14")
+#   Anular B = entre o 14" e o próximo limite (poço aberto ou 22"), só acima do TOC do 14"
+# Revestimentos do mais interno para o mais externo. toc ausente = cimentado até o topo.
+architecture:
+  wellhead: 1785.0
+  packer: 6317.0          # base da COP/COI (fim do Anular A no PySafe: 6.316,9 m)
+  td: 6732.0
+  casings:
+    - {key: "10.75", wellcat_match: '10 3/4"', top: 6050.0, shoe: 6732.0, toc: 6050.0}  # TOC liner = topo (assumido)
+    - {key: "14",    wellcat_match: '14"',     top: 1785.0, shoe: 6150.0, toc: 5200.0}  # Anular B do PySafe termina em 5.199,9 m
+    - {key: "22",    wellcat_match: '22"',     top: 1785.0, shoe: 3425.0}
+
+loadcases:
+  - id: prod_surg_pico_oleo
+    name: "Produção Surgente – Pico Óleo (Tortuga)"
+    short: "Prod. Surg. Pico Óleo"
+    file: "data/raw/orion_pico_oleo.xlsx"
+    sheets:
+      temp_pysafe: "Dados Termicos SCORE - PySafe -"
+      temp_wellcat: "Dados Termicos - WellCat"
+      press_pysafe: "Dados Pressao - Pysafe"
+      press_wellcat: "Dados Pressao - WellCat"
+    # architecture: {...}   # opcional: sobrescreve a arquitetura (outro poço/fase)
+    # Leitura qualitativa (até 3 itens) — aparece no slide de resumo
+    observations:
+      - "Liner 10 3/4\" converge entre os softwares (ΔT entre +0,1 e +3,3 °C). Nos trechos rasos o WellCat mostra gradiente radial maior: a 1.785 m, COP/COI 90 °C, 14\" 68 °C e 22\" 30 °C, contra 86–89 °C em todas as colunas no PySafe."
+      - "WellCat térmico do 14\" e da COP/COI só tem dado até ~2.400 m (16% e 13% do trecho). Abaixo disso a curva foi estimada até o liner (~113 °C): ΔT médio no trecho completo de +11,3 °C (14\") e +10,7 °C (COP/COI), contra +16,8 e +19,3 °C só no trecho medido."
+      - "Pressão comparada por espaço físico (PySafe nomeia anulares, WellCat nomeia revestimentos): 22\" × Anular B alinhados (Δ médio −24 psi). No 14\" e no liner acima do packer, mesmo comparando o mesmo Anular A, o WellCat fica até ~2.100–2.230 psi acima, com gradiente equivalente de 2,24 psi/m contra 1,79 psi/m no PySafe."
+    # Itens do slide final "Pontos a confirmar"
+    next_steps:
+      - "Confirmar o TOC do liner 10 3/4\" (assumido no topo, 6.050 m; o PySafe não mostra Anular B entre liner e 14\")."
+      - "Reexportar do WellCat os perfis térmicos completos do 14\" e da COP/COI (hoje até ~2.500 m)."
+      - "Comparar fluido de anular e pressão de cabeça adotados no 14\" (caso AFE do WellCat) com o Anular A do PySafe — provável origem do gradiente maior."
+      - "Verificar a condição de contorno junto ao fundo do mar no 22\" (WellCat 30 °C × PySafe 86 °C a 1.785 m)."
+      - "Repetir a análise para os demais carregamentos e consolidar."
