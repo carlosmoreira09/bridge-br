@@ -1,7 +1,0 @@
-__pycache__/
-*.pyc
-out/qa/
-out/x/
-out/*.pdf
-.DS_Store
-~$*
